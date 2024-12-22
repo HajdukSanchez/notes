@@ -14,15 +14,50 @@ struct ContentView: View {
     @State private var text : String = ""
     
     // MARK: - Functions
-    func saveNewNote() {
+    
+    // Create the note to save
+    func createSavingNote() {
         guard text.isEmpty == false else { return }
         let newNote = Note(id: UUID(), text: text)
         notes.append(newNote)
         text = ""
     }
     
+    // Get the directory assigned to the app, in order to save and get data there
+    func getDocumentDirectory() -> URL {
+        let path = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        return path[0]
+    }
+    
+    // Save the notes locally
     func saveNoteLocally() {
-        dump(notes)
+        do {
+            let data = try JSONEncoder().encode(notes)
+            let url = getDocumentDirectory().appendingPathComponent("notes")
+            try data.write(to: url)
+        } catch {
+            print("Saving data fails")
+        }
+    }
+    
+    // Load the saved notes locally
+    func loadNotesLocally() {
+        DispatchQueue.main.async {
+            do {
+                let url = getDocumentDirectory().appendingPathComponent("notes")
+                let data = try Data(contentsOf: url)
+                notes = try JSONDecoder().decode([Note].self, from: data)
+            } catch {
+                print("No data yet")
+            }
+        }
+    }
+    
+    func deleteNote(offsets: IndexSet) {
+        withAnimation {
+            notes.remove(atOffsets: offsets)
+            saveNoteLocally()
+        }
     }
     
     // MARK: - Body
@@ -32,7 +67,7 @@ struct ContentView: View {
                 HStack(alignment: .center, spacing: 6) {
                     TextField("Add new note", text: $text)
                     Button {
-                        saveNewNote()
+                        createSavingNote()
                         saveNoteLocally()
                     } label: {
                         Image(systemName: "plus.circle")
@@ -43,9 +78,35 @@ struct ContentView: View {
                     .foregroundStyle(.accent)
                 }
                 Spacer()
-                Text("\(notes.count)")
+                if notes.count >= 1 {
+                    List {
+                        ForEach(0..<notes.count, id: \.self) { index in
+                            HStack {
+                                Capsule()
+                                    .frame(width: 4)
+                                    .foregroundStyle(Color.accentColor)
+                                Text(notes[index].text)
+                                    .lineLimit(1)
+                                    .padding(.leading, 5)
+                            }
+                        }
+                        .onDelete(perform: deleteNote)
+                    }
+                } else {
+                    Spacer()
+                    Image(systemName: "note.text")
+                        .resizable()
+                        .scaledToFit()
+                        .foregroundStyle(.gray)
+                        .opacity(0.25)
+                        .padding(25)
+                    Spacer()
+                }
             }
             .navigationTitle("Notes")
+            .onAppear {
+                loadNotesLocally()
+            }
         }
     }
 }
